@@ -1,8 +1,6 @@
-# BBH Video Context Pipeline API
+# BBH Turn culturally dense long-form video into self-explanatory content—for any audience, automatically.
 
 Powered by Google Deepmind, Tavily, Lovable and Hera
-
-**Turn culturally dense long-form video into self-explanatory content—for any audience, automatically.**
 
 **Live Frontend:** [pixel-perfect-clone-1368.lovable.app](https://pixel-perfect-clone-1368.lovable.app)
 
