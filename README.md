@@ -1,5 +1,7 @@
 # BBH Video Context Pipeline API
 
+https://pixel-perfect-clone-1368.lovable.app
+
 FastAPI backend that turns long-form videos into contextual, audience-aware overlays.
 
 This project analyzes a source video, detects references that may be unclear to a target audience, generates short visual explainer clips, removes their green background, and overlays them back on the original video timeline.
