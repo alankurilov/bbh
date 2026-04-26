@@ -2,6 +2,8 @@
 
 https://pixel-perfect-clone-1368.lovable.app
 
+## Small message to the Hera Team, if you could add the background removing features by API, it would be so cool, we tried to build the feature by ourselves hahaha :)
+
 FastAPI backend that turns long-form videos into contextual, audience-aware overlays.
 
 This project analyzes a source video, detects references that may be unclear to a target audience, generates short visual explainer clips, removes their green background, and overlays them back on the original video timeline.
