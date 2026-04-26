@@ -1,133 +1,161 @@
 # BBH Video Context Pipeline API
 
-https://pixel-perfect-clone-1368.lovable.app
+Powered by Google Deepmind, Tavily, Lovable and Hera
 
-FastAPI backend that turns long-form videos into contextual, audience-aware overlays.
+**Turn culturally dense long-form video into self-explanatory content—for any audience, automatically.**
 
-This project analyzes a source video, detects references that may be unclear to a target audience, generates short visual explainer clips, removes their green background, and overlays them back on the original video timeline.
-
----
-
-## Why this project
-
-International audiences often miss local political, cultural, or institutional references in podcasts and commentary videos.  
-This API solves that by automatically adding contextual explainer segments at the right timestamps.
-
-Core value:
-- Adapts to viewer profile (`informed`, `curious`, `newcomer`)
-- Controls explanation density (`subtle`, `immersive`)
-- Produces timeline-aligned contextual overlays automatically
+**Live Frontend:** [pixel-perfect-clone-1368.lovable.app](https://pixel-perfect-clone-1368.lovable.app)
 
 ---
 
-## Tech stack
+## The Problem
 
-- **Backend**: FastAPI
-- **LLM / Video understanding**: Google Gemini (multimodal)
-- **Image retrieval**: Tavily (intelligent web search, first-image selection)
-- **Video generation**: Hera API
-- **Background removal**: custom OpenCV/ImageIO chroma-key pipeline
-- **Compositing**: MoviePy overlays on source timeline
-- **Frontend**: built with **Lovable** (separate repo/app)
+A political podcaster mentions "the filibuster." A sports commentator references a 1998 World Cup moment. A business analyst name-drops a regional regulator. To local viewers, these are shorthand. To international or younger audiences, they're dead ends.
+
+**Context gaps kill engagement.** Viewers abandon videos when they feel lost, and manual annotation doesn't scale.
 
 ---
 
-## High-level pipeline
+## The Solution
 
-1. Analyze video with Gemini using viewer profile + density
-2. Get timestamped gaps (`title`, short `content`, interval)
-3. Search an image per gap with Tavily
-4. Generate visual explainer clips with Hera
-5. Poll Hera until each clip is ready
-6. Remove green background from generated clips
-7. Overlay all clips on the source video at gap timestamps
-8. Return final video URL + detailed processing metadata
+This pipeline automatically detects ambiguous references in long-form video, generates short visual explainers, and overlays them seamlessly onto the original timeline.
+
+**Three levers of control:**
+- **Audience profile:** `informed` · `curious` · `newcomer`
+- **Explanation density:** `subtle` (brief popup) · `immersive` (full segment)
+- **Zero manual editing:** Fully timestamped, generated, and composited
+
+**What the output looks like:**
+> At 04:32, the speaker says *"the CHIPS Act."* The pipeline detects this as a gap for a `newcomer` audience, generates a 6-second animated explainer with a sourced image, removes its green-screen background, and overlays it as a picture-in-picture contextual card. The viewer never leaves the video.
 
 ---
 
-## API overview
+## Architecture
 
-### Health
-- `GET /`  
-Basic health check.
+```
+┌──────────────┐     ┌──────────────┐     ┌──────────────┐
+│ Source Video │────▶│   Gemini     │────▶│  Timestamped │
+│ (YT/MP4)     │     │  Multimodal  │     │  Context Gaps│
+└──────────────┘     │  Analysis    │     └──────────────┘
+                     └──────────────┘            │
+                                                  ▼
+┌──────────────┐     ┌──────────────┐     ┌──────────────┐
+│ Final Video  │◀────│   MoviePy    │◀────│ Transparent  │
+│ (Composited) │     │  Overlay     │     │  WebM Clips  │
+└──────────────┘     └──────────────┘     └──────────────┘
+                                                  ▲
+┌──────────────┐     ┌──────────────┐     ┌──────────────┐
+│ Tavily Image │────▶│   Hera API   │────▶│ OpenCV       │
+│   Search     │     │   Generation │     │ Chroma-Key   │
+└──────────────┘     │   + Polling  │     │ Pipeline     │
+                     └──────────────┘     └──────────────┘
+```
+
+---
+
+## Tech Stack
+
+| Layer | Technology | Why It Was Chosen |
+|-------|-----------|-------------------|
+| **Backend** | FastAPI | Async-native, auto-generated OpenAPI docs, production-grade |
+| **Video Understanding** | Google Gemini 3 Flash (multimodal) | Native video comprehension + structured output for gap detection |
+| **Knowledge Retrieval** | Tavily | Intelligent web search with automatic first-image ranking |
+| **Video Generation** | Hera API | Template-driven motion graphics from text inputs |
+| **Matting** | Custom OpenCV/ImageIO pipeline | Lightweight, server-side chroma-key without third-party SaaS costs |
+| **Compositing** | MoviePy | Frame-accurate timeline overlays with alpha channel support |
+| **Frontend** | Lovable | Separate no-code interface for job orchestration and preview |
+
+---
+
+## API Reference
+
+### System
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/` | Health check + version metadata |
 
 ### Analysis
-- `POST /analyze-video`  
-Analyze a YouTube URL or uploaded MP4 and return explanation gaps.
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/analyze-video` | Ingest a YouTube URL or uploaded MP4. Returns structured context gaps with `title`, `explanation_text`, and `interval` (start/end seconds), filtered by the requested audience profile and density. |
 
-### Image search
-- `GET /search-image?query=...`  
-Returns first image URL from Tavily results.
+### Asset Production
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/search-image` | Intelligent image retrieval. Returns the highest-relevance image URL for a given query (e.g., *"CHIPS Act semiconductor factory"*) via Tavily. |
+| `POST` | `/generate-video` | Submit a template-driven prompt to Hera (`title`, `body_text`, `duration`, `image_url`, brand colors). Returns a `video_id`. |
+| `GET` | `/generate-video/{video_id}` | Poll for generation status. Returns `status` (`pending` \| `processing` \| `done`) and `output_url` when complete. |
+| `POST` | `/remove-background` | Upload a generated clip (green-screen). Returns a transparent WebM with alpha channel, ready for compositing. |
 
-### Hera generation
-- `POST /generate-video`  
-Generate one explainer clip from template-driven prompt inputs (`title`, `body_text`, `seconds`, colors, image URL).
-- `GET /generate-video/{video_id}`  
-Check Hera generation status and retrieve output URL when ready.
+### Composition
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/compose-overlay` | Accepts a background video + array of transparent clips with timestamp intervals. Returns the final composited video. |
 
-### Background removal
-- `POST /remove-background`  
-Upload a clip and return transparent WebM output URL.
+### Orchestration
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/pipeline-prototype` | **Synchronous** end-to-end run. Useful for demos and testing. Returns `final_video_url` + full diagnostics trace. |
+| `POST` | `/pipeline-jobs` | **Asynchronous** production entrypoint. Starts background job, immediately returns `job_id`. |
+| `GET` | `/pipeline-jobs/{job_id}` | Poll for live progress. Returns current `stage`, `progress_pct`, per-stage diagnostics, and final `result` when done. |
 
-### Overlay composition
-- `POST /compose-overlay`  
-Overlay one or multiple transparent clips over a background video using timestamp intervals.
-
-### End-to-end prototype
-- `POST /pipeline-prototype`  
-Runs full orchestration synchronously and returns final composed video URL + diagnostics.
-
-### Async job orchestration (frontend-friendly)
-- `POST /pipeline-jobs`  
-Start full pipeline in background, returns `job_id`.
-- `GET /pipeline-jobs/{job_id}`  
-Returns status/stage/progress + final result when completed.
+**Production polling stages:** `analyzing` → `search_generate` → `poll_generation` → `remove_background` → `compose` → `done`
 
 ---
 
-## Environment variables
+## Environment Variables
 
-Required:
-- `GEMINI_API_KEY`
-- `HERA_API_KEY`
-- `TAVILY_API_KEY`
-
-Optional:
-- `GEMINI_MODEL` (default `gemini-3-flash-preview`)
-- `MAX_VIDEO_MB`
-- `YTDLP_COOKIES_TXT_B64` or `YTDLP_COOKIES_TXT` (for YouTube anti-bot protected downloads)
+| Variable | Required | Default | Purpose |
+|----------|----------|---------|---------|
+| `GEMINI_API_KEY` | Yes | — | Multimodal video analysis |
+| `HERA_API_KEY` | Yes | — | Explainer clip generation |
+| `TAVILY_API_KEY` | Yes | — | Contextual image search |
+| `GEMINI_MODEL` | No | `gemini-3-flash-preview` | Model version override |
+| `MAX_VIDEO_MB` | No | — | Upload size limit |
+| `YTDLP_COOKIES_TXT_B64` / `YTDLP_COOKIES_TXT` | No | — | YouTube anti-bot bypass (base64 or raw path) |
 
 ---
 
-## Run locally
+## Local Development
 
 ```bash
+# 1. Install dependencies
 pip install -r requirements.txt
+
+# 2. Configure environment
+cp .env.example .env
+# Edit .env with your API keys
+
+# 3. Run with hot-reload
 uvicorn main:app --host 127.0.0.1 --port 8000 --env-file .env --reload
 ```
 
-Open docs:
-- `http://127.0.0.1:8000/docs`
+**Interactive docs:** [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)
 
 ---
 
 ## Deployment
 
-Configured for Railway with:
-- `Dockerfile`
-- `railway.toml`
+**Railway-ready** out of the box:
+- `Dockerfile` included
+- `railway.toml` pre-configured
 
-Recommended production hardening:
-- Persist job state in Redis (instead of in-memory)
-- Store media in object storage (S3/R2) instead of local disk
+**Production hardening checklist:**
+- [ ] Replace in-memory job state with **Redis** (or Postgres) for horizontal scaling
+- [ ] Move local disk media to **S3 / R2 / GCS** with presigned URLs
+- [ ] Add rate limiting per `job_id` on polling endpoints
+- [ ] Implement webhook callbacks from `/pipeline-jobs` instead of pure polling
+- [ ] Add structured logging (JSON) and distributed tracing per pipeline stage
 
 ---
 
-## Frontend integration (Lovable)
+## Frontend Integration (Lovable)
 
-Lovable can:
-- Start jobs via `POST /pipeline-jobs`
-- Poll progress via `GET /pipeline-jobs/{job_id}`
-- Display stage-based loading animations (`analyzing`, `search_generate`, `poll_generation`, `remove_background`, `compose`, `done`)
-- Show final output with `result.final_video_url`
+The Lovable frontend is designed to treat this API as a managed video-rendering backend:
 
+1. **Start:** `POST /pipeline-jobs` with the source URL and audience config
+2. **Poll:** `GET /pipeline-jobs/{job_id}` every 2–3 seconds
+3. **Animate:** Map `stage` names to branded loading states (e.g., "Analyzing context…" → "Generating visuals…" → "Compositing timeline…")
+4. **Deliver:** Display the final player with `result.final_video_url`
+
+---
