@@ -18,7 +18,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from compose_transparent_overlay import ForegroundOverlay, overlay_multiple_non_transparent_parts
 from remove_background import remove_background_video
-
+from dotenv import load_dotenv
 load_dotenv()
 
 app = FastAPI(
@@ -348,7 +348,22 @@ async def analyze_video(
         viewer_profile=viewer_profile,
         caption_density=caption_density,
     )
+@app.post("/find_image")
+def find_image(image_description: str):
+    query = f"{image_description} {gap.content[:120]} reference image explanation"
+    response = clientTavily.search(
+        query=query,
+        search_depth="advanced",
+        include_images=True,
+        max_results=5,
+    )
 
+    images = response.get("images", [])
+
+    if not images:
+        raise HTTPException(status_code=404, detail="No image found")
+
+    return {"image": images[0]}
 
 @app.post("/remove-background", response_model=BackgroundRemovalResponse)
 async def remove_background_endpoint(
@@ -395,7 +410,7 @@ async def generate_video_with_hera(
     title_text_color: str | None = Form(default=None),
     body_text_color: str | None = Form(default=None),
 ) -> HeraVideoCreateResponse:
-    hera_api_key = os.getenv("HERA_API_KEY")
+    hera_api_key = os.getenv("HERA_API_KEY") 
     if not hera_api_key:
         raise HTTPException(status_code=500, detail="Missing HERA_API_KEY environment variable.")
     if seconds < 1 or seconds > 60:
