@@ -1,0 +1,11 @@
+fastapi
+google-genai
+imageio
+imageio-ffmpeg
+moviepy
+numpy
+opencv-python
+python-dotenv
+python-multipart
+uvicorn[standard]
+yt-dlp
