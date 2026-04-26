@@ -30,3 +30,6 @@ dist/
 Thumbs.db
 .vscode/
 .idea/
+
+media/uploads/
+media/outputs/
