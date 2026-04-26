@@ -14,6 +14,9 @@ from fastapi.staticfiles import StaticFiles
 from google import genai
 from google.genai import types
 from pydantic import BaseModel, Field
+from dotenv import load_dotenv
+load_dotenv()
+from fastapi.middleware.cors import CORSMiddleware
 
 from compose_transparent_overlay import ForegroundOverlay, overlay_multiple_non_transparent_parts
 from remove_background import remove_background_video
@@ -24,6 +27,15 @@ app = FastAPI(
     title="Video Explanation Gap Analyzer",
     description="Analyze a YouTube link or MP4 file and find video segments with concepts not fully explained.",
 )
+<<<<<<< HEAD
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # 🔥 allow all (for development)
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+=======
 
 MEDIA_DIR = Path("media")
 UPLOADS_DIR = MEDIA_DIR / "uploads"
@@ -31,7 +43,9 @@ OUTPUTS_DIR = MEDIA_DIR / "outputs"
 UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 OUTPUTS_DIR.mkdir(parents=True, exist_ok=True)
 app.mount("/media", StaticFiles(directory=MEDIA_DIR), name="media")
+HERA_PROMPT_TEMPLATE_PATH = Path(__file__).with_name("PROMPT_HERA.md")
 
+>>>>>>> d8abb51178a69fc50d28f771398f280004f252a9
 
 class GapSegment(BaseModel):
     title: str = Field(..., description="Short segment title")
@@ -174,6 +188,27 @@ def _guess_extension_from_url(url: str, fallback: str) -> str:
     if suffix in {".mp4", ".webm", ".mov", ".mkv"}:
         return suffix
     return fallback
+
+
+def _build_hera_prompt(title: str, body_text: str, seconds: int) -> str:
+    if not HERA_PROMPT_TEMPLATE_PATH.exists():
+        raise HTTPException(status_code=500, detail="Missing PROMPT_HERA.md template file.")
+
+    template = HERA_PROMPT_TEMPLATE_PATH.read_text(encoding="utf-8")
+    required_placeholders = {"{{TITLE}}", "{{BODY_TEXT}}", "{{SECONDS}}"}
+    missing = [token for token in required_placeholders if token not in template]
+    if missing:
+        raise HTTPException(
+            status_code=500,
+            detail=f"PROMPT_HERA.md is missing placeholders: {', '.join(missing)}",
+        )
+
+    prompt = (
+        template.replace("{{TITLE}}", title)
+        .replace("{{BODY_TEXT}}", body_text)
+        .replace("{{SECONDS}}", str(seconds))
+    )
+    return prompt
 
 
 def _run_gemini_analysis(
@@ -331,12 +366,18 @@ async def remove_background_endpoint(
 
 @app.post("/generate-video", response_model=HeraVideoCreateResponse)
 async def generate_video_with_hera(
-    prompt: str = Form(...),
+    title: str = Form(...),
+    body_text: str = Form(...),
+    seconds: int = Form(...),
     asset_image_url: str = Form(...),
 ) -> HeraVideoCreateResponse:
     hera_api_key = os.getenv("HERA_API_KEY") 
     if not hera_api_key:
         raise HTTPException(status_code=500, detail="Missing HERA_API_KEY environment variable.")
+    if seconds < 1 or seconds > 60:
+        raise HTTPException(status_code=400, detail="seconds must be between 1 and 60.")
+
+    prompt = _build_hera_prompt(title=title, body_text=body_text, seconds=seconds)
 
     payload = {
         "prompt": prompt,
@@ -346,6 +387,7 @@ async def generate_video_with_hera(
                 "url": asset_image_url,
             }
         ],
+        "duration_seconds": seconds,
         "outputs": [
             {
                 "format": "mp4",
