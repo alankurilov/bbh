@@ -14,8 +14,6 @@ from fastapi.staticfiles import StaticFiles
 from google import genai
 from google.genai import types
 from pydantic import BaseModel, Field
-from dotenv import load_dotenv
-load_dotenv()
 from fastapi.middleware.cors import CORSMiddleware
 
 from compose_transparent_overlay import ForegroundOverlay, overlay_multiple_non_transparent_parts
@@ -27,7 +25,6 @@ app = FastAPI(
     title="Video Explanation Gap Analyzer",
     description="Analyze a YouTube link or MP4 file and find video segments with concepts not fully explained.",
 )
-<<<<<<< HEAD
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  # 🔥 allow all (for development)
@@ -35,7 +32,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-=======
 
 MEDIA_DIR = Path("media")
 UPLOADS_DIR = MEDIA_DIR / "uploads"
@@ -43,9 +39,8 @@ OUTPUTS_DIR = MEDIA_DIR / "outputs"
 UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 OUTPUTS_DIR.mkdir(parents=True, exist_ok=True)
 app.mount("/media", StaticFiles(directory=MEDIA_DIR), name="media")
-HERA_PROMPT_TEMPLATE_PATH = Path(__file__).with_name("PROMPT_HERA.md")
 
->>>>>>> d8abb51178a69fc50d28f771398f280004f252a9
+HERA_PROMPT_TEMPLATE_PATH = Path(__file__).with_name("PROMPT_HERA.md")
 
 class GapSegment(BaseModel):
     title: str = Field(..., description="Short segment title")
@@ -190,12 +185,26 @@ def _guess_extension_from_url(url: str, fallback: str) -> str:
     return fallback
 
 
-def _build_hera_prompt(title: str, body_text: str, seconds: int) -> str:
+def _build_hera_prompt(
+    title: str,
+    body_text: str,
+    seconds: int,
+    banner_color: str,
+    title_text_color: str,
+    body_text_color: str,
+) -> str:
     if not HERA_PROMPT_TEMPLATE_PATH.exists():
         raise HTTPException(status_code=500, detail="Missing PROMPT_HERA.md template file.")
 
     template = HERA_PROMPT_TEMPLATE_PATH.read_text(encoding="utf-8")
-    required_placeholders = {"{{TITLE}}", "{{BODY_TEXT}}", "{{SECONDS}}"}
+    required_placeholders = {
+        "{{TITLE}}",
+        "{{BODY_TEXT}}",
+        "{{SECONDS}}",
+        "{{BANNER_COLOR}}",
+        "{{TITLE_TEXT_COLOR}}",
+        "{{BODY_TEXT_COLOR}}",
+    }
     missing = [token for token in required_placeholders if token not in template]
     if missing:
         raise HTTPException(
@@ -207,8 +216,35 @@ def _build_hera_prompt(title: str, body_text: str, seconds: int) -> str:
         template.replace("{{TITLE}}", title)
         .replace("{{BODY_TEXT}}", body_text)
         .replace("{{SECONDS}}", str(seconds))
+        .replace("{{BANNER_COLOR}}", banner_color)
+        .replace("{{TITLE_TEXT_COLOR}}", title_text_color)
+        .replace("{{BODY_TEXT_COLOR}}", body_text_color)
     )
     return prompt
+
+
+def _normalize_color_descriptor(value: str | None, field_name: str) -> str | None:
+    if value is None:
+        return None
+    descriptor = value.strip()
+    if not descriptor:
+        return None
+    if len(descriptor) > 80:
+        raise HTTPException(
+            status_code=400,
+            detail=f"{field_name} is too long (max 80 characters).",
+        )
+    if "{" in descriptor or "}" in descriptor:
+        raise HTTPException(
+            status_code=400,
+            detail=f"{field_name} contains invalid characters.",
+        )
+    return descriptor
+
+
+def _resolve_optional_color(value: str | None, default_value: str, field_name: str) -> str:
+    normalized = _normalize_color_descriptor(value, field_name)
+    return normalized or default_value
 
 
 def _run_gemini_analysis(
@@ -355,6 +391,9 @@ async def generate_video_with_hera(
     body_text: str = Form(...),
     seconds: int = Form(...),
     asset_image_url: str = Form(...),
+    banner_background_color: str | None = Form(default=None),
+    title_text_color: str | None = Form(default=None),
+    body_text_color: str | None = Form(default=None),
 ) -> HeraVideoCreateResponse:
     hera_api_key = os.getenv("HERA_API_KEY")
     if not hera_api_key:
@@ -362,7 +401,30 @@ async def generate_video_with_hera(
     if seconds < 1 or seconds > 60:
         raise HTTPException(status_code=400, detail="seconds must be between 1 and 60.")
 
-    prompt = _build_hera_prompt(title=title, body_text=body_text, seconds=seconds)
+    # Accept natural language (e.g. "deep navy", "warm white").
+    safe_banner_color = _resolve_optional_color(
+        banner_background_color,
+        "dark charcoal to near-black",
+        "banner_background_color",
+    )
+    safe_title_color = _resolve_optional_color(
+        title_text_color,
+        "white or off-white",
+        "title_text_color",
+    )
+    safe_body_color = _resolve_optional_color(
+        body_text_color,
+        "soft off-white",
+        "body_text_color",
+    )
+    prompt = _build_hera_prompt(
+        title=title,
+        body_text=body_text,
+        seconds=seconds,
+        banner_color=safe_banner_color,
+        title_text_color=safe_title_color,
+        body_text_color=safe_body_color,
+    )
 
     payload = {
         "prompt": prompt,
