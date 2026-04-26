@@ -1,4 +1,4 @@
-# BBH Turn culturally dense long-form video into self-explanatory content—for any audience, automatically.
+# Turn culturally dense long-form video into self-explanatory content—for any audience, automatically.
 
 Powered by Google Deepmind, Tavily, Lovable and Hera
 
