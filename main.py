@@ -6,12 +6,21 @@ from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from google import genai
 from google.genai import types
 from pydantic import BaseModel, Field
+from dotenv import load_dotenv
+load_dotenv()
+from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI(
     title="Video Explanation Gap Analyzer",
     description="Analyze a YouTube link or MP4 file and find video segments with concepts not fully explained.",
 )
-
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # 🔥 allow all (for development)
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 class GapSegment(BaseModel):
     title: str = Field(..., description="Short segment title")
