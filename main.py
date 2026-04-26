@@ -14,6 +14,9 @@ from fastapi.staticfiles import StaticFiles
 from google import genai
 from google.genai import types
 from pydantic import BaseModel, Field
+from dotenv import load_dotenv
+load_dotenv()
+from fastapi.middleware.cors import CORSMiddleware
 
 from compose_transparent_overlay import ForegroundOverlay, overlay_multiple_non_transparent_parts
 from remove_background import remove_background_video
@@ -24,6 +27,15 @@ app = FastAPI(
     title="Video Explanation Gap Analyzer",
     description="Analyze a YouTube link or MP4 file and find video segments with concepts not fully explained.",
 )
+<<<<<<< HEAD
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # 🔥 allow all (for development)
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+=======
 
 MEDIA_DIR = Path("media")
 UPLOADS_DIR = MEDIA_DIR / "uploads"
@@ -33,6 +45,7 @@ OUTPUTS_DIR.mkdir(parents=True, exist_ok=True)
 app.mount("/media", StaticFiles(directory=MEDIA_DIR), name="media")
 HERA_PROMPT_TEMPLATE_PATH = Path(__file__).with_name("PROMPT_HERA.md")
 
+>>>>>>> d8abb51178a69fc50d28f771398f280004f252a9
 
 class GapSegment(BaseModel):
     title: str = Field(..., description="Short segment title")
