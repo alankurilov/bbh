@@ -87,6 +87,11 @@ class ComposeOverlayResponse(BaseModel):
     output_video_path: str
 
 
+class TavilyImageResponse(BaseModel):
+    query: str
+    image_url: str
+
+
 ViewerProfile = Literal["informed", "curious", "newcomer"]
 CaptionDensity = Literal["subtle", "immersive"]
 
@@ -348,23 +353,6 @@ async def analyze_video(
         viewer_profile=viewer_profile,
         caption_density=caption_density,
     )
-@app.post("/find_image")
-def find_image(image_description: str):
-    query = f"{image_description} {gap.content[:120]} reference image explanation"
-    response = clientTavily.search(
-        query=query,
-        search_depth="advanced",
-        include_images=True,
-        max_results=5,
-    )
-
-    images = response.get("images", [])
-
-    if not images:
-        raise HTTPException(status_code=404, detail="No image found")
-
-    return {"image": images[0]}
-
 @app.post("/remove-background", response_model=BackgroundRemovalResponse)
 async def remove_background_endpoint(
     request: Request,
@@ -565,6 +553,47 @@ async def get_generated_video_status(video_id: str) -> HeraVideoStatusResponse:
         video_id=parsed.get("video_id", video_id),
         response=parsed,
     )
+
+
+@app.get("/search-image", response_model=TavilyImageResponse)
+async def search_image_with_tavily(query: str) -> TavilyImageResponse:
+    tavily_api_key = os.getenv("TAVILY_API_KEY")
+    if not tavily_api_key:
+        raise HTTPException(status_code=500, detail="Missing TAVILY_API_KEY environment variable.")
+    if not query.strip():
+        raise HTTPException(status_code=400, detail="query must not be empty.")
+
+    tavily_payload = {
+        "api_key": tavily_api_key,
+        "query": query,
+        "search_depth": "fast",
+        "include_images": True,
+    }
+    tavily_request = urllib.request.Request(
+        url="https://api.tavily.com/search",
+        data=json.dumps(tavily_payload).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(tavily_request, timeout=60) as tavily_response:
+            response = json.loads(tavily_response.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        error_body = exc.read().decode("utf-8", errors="ignore")
+        raise HTTPException(
+            status_code=502,
+            detail=f"Tavily API HTTP error {exc.code}: {error_body or exc.reason}",
+        ) from exc
+    except urllib.error.URLError as exc:
+        raise HTTPException(status_code=502, detail=f"Tavily API connection error: {exc.reason}") from exc
+    except json.JSONDecodeError as exc:
+        raise HTTPException(status_code=502, detail=f"Invalid JSON from Tavily API: {exc.msg}") from exc
+
+    images = response.get("images") or []
+    if not images:
+        raise HTTPException(status_code=404, detail="No images found for this query.")
+
+    return TavilyImageResponse(query=query, image_url=images[0])
 
 
 @app.post("/compose-overlay", response_model=ComposeOverlayResponse)
